@@ -23,17 +23,21 @@ It is not a Git command wrapper. The default behavior is inspection and planning
 
 ## Quickstart
 
-Install the skill at the user level (available in all projects):
+Clone this repository locally first, then run the install script from the repository root.
 
 **Claude Code - PowerShell**
 
 ```powershell
+git clone https://github.com/Shaelz/codebase-trellis-skill.git
+cd codebase-trellis-skill
 .\scripts\install-user.ps1
 ```
 
 **Claude Code - bash**
 
 ```bash
+git clone https://github.com/Shaelz/codebase-trellis-skill.git
+cd codebase-trellis-skill
 bash scripts/install-user.sh
 ```
 
@@ -41,12 +45,14 @@ Then restart Claude Code and type `/codebase-trellis` in any project.
 
 ## Install paths
 
-| Goal | Command |
-|---|---|
-| User-level (Claude Code, PowerShell) | `.\scripts\install-user.ps1` |
-| User-level (Claude Code, bash) | `bash scripts/install-user.sh` |
-| Project-local (Claude Code, PowerShell) | `.\path\to\install-project.ps1` |
-| Project-local (Claude Code, bash) | `bash path/to/install-project.sh` |
+| Goal | Run from | Command |
+|---|---|---|
+| User-level (PowerShell) | repo root | `.\scripts\install-user.ps1` |
+| User-level (bash) | repo root | `bash scripts/install-user.sh` |
+| Project-local (PowerShell) | target project root | `path\to\codebase-trellis-skill\scripts\install-project.ps1` |
+| Project-local (bash) | target project root | `bash path/to/codebase-trellis-skill/scripts/install-project.sh` |
+
+User-level install makes the skill available in all projects. Project-local install adds it only to the current project's `.claude/skills/` directory. For project-local installs, navigate to your project root first, then call the script using the full path to where you cloned this repo.
 
 If an installation already exists, the scripts exit with an error unless you pass `-Force` (PowerShell) or `--force` (bash).
 

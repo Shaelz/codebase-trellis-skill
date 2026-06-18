@@ -22,7 +22,7 @@ Ecosystem:
 - A branch or worktree needs to be set up, finished, or cleaned up.
 - A push, PR, or CI state needs inspection or preparation.
 - Git/GitHub repo posture needs an audit.
-- A long-running agent session needs structured checkpoint support.
+- A long-running agent session needs a structured state review before continuing.
 - The working tree is dirty and the right next step is unclear.
 
 ### Skip this skill when
