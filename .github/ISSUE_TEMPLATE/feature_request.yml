@@ -1,0 +1,44 @@
+name: Feature request
+description: Propose a focused improvement to install flows, skill behavior, safety model, or documentation.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: use_case
+    attributes:
+      label: Use case or problem
+      description: What problem are you trying to solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed improvement
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Affected surface
+      options:
+        - Skill behavior / safety gates
+        - Install scripts
+        - Documentation
+        - Trellis report format
+        - Mode routing
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: checkboxes
+    id: acknowledgements
+    attributes:
+      label: Acknowledgement
+      options:
+        - label: I have checked docs/FUTURE_BRANCHES.md to see if this idea is already tracked.
+    validations:
+      required: true

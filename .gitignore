@@ -1,0 +1,12 @@
+.DS_Store
+Thumbs.db
+.env
+*.log
+*.zip
+
+# Local agent install artifacts for testing
+.agents/
+.claude/
+
+# Generated orientation cache - self-orientation output is non-canonical in this source repo
+docs/ai/
