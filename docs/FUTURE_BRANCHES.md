@@ -34,7 +34,7 @@ Required for a trustworthy first release.
 
 Strong candidates after the core is stable.
 
-- GitHub ruleset/protection visibility in the Canopy check.
+- Optional GitHub ruleset/protection configuration guidance or mutation support, with explicit approval gates; read-only posture visibility already shipped in v1.
 - Merge queue awareness.
 - PR-level required-check reporting.
 - Workflow-run failure inspection and summarized failing steps.
@@ -57,7 +57,7 @@ Useful, cool, or quality-of-life features that should not block release.
 - PR review-thread summary and unresolved-comment checklist.
 - Dependency-change risk lens.
 - Generated file policy detector.
-- Commit-message style inference from recent history.
+- Deeper commit-style analytics and repository-specific commit-template discovery beyond the conservative recent-history inference shipped in v1.
 - Signing identity diagnostics.
 - Conventional commit suggestion mode.
 - Optional risk labels for PRs, such as `risk:low`, `risk:medium`, `risk:high`.

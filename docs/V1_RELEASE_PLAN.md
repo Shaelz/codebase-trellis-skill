@@ -238,27 +238,32 @@ Acceptance:
 - [x] LICENSE is MIT with correct year and name
 - [x] docs/FUTURE_BRANCHES.md contains only non-v1 items; all v1 core items are implemented
 
-### Must do before creating the v1.0.0 tag
+### Pre-tag checklist (historical; required steps completed 2026-06-19)
 
-- [ ] Final run of `bash scripts/verify-skill-package.sh`
-- [ ] Final run of `bash scripts/check-ascii-punctuation.sh skills docs README.md CHANGELOG.md SECURITY.md CODE_OF_CONDUCT.md`
-- [ ] Confirm `git tag --list` shows no existing v1.0.0 tag
-- [ ] Confirm `git status` is clean
+The annotated `v1.0.0` tag was created and pushed after the required checks. It points at commit `fb498c9`. The optional clean-clone smoke install was not recorded as part of the final tag operation.
+
+- [x] Final run of `bash scripts/verify-skill-package.sh`
+- [x] Final run of `bash scripts/check-ascii-punctuation.sh skills docs README.md CHANGELOG.md SECURITY.md CODE_OF_CONDUCT.md`
+- [x] Confirm `git tag --list` shows no existing v1.0.0 tag
+- [x] Confirm `git status` is clean
 - [ ] Optional: smoke-install from a clean clone into a temp directory to verify the install path end-to-end
-- [ ] Review CHANGELOG entry for accuracy -- remove "-rc.1" suffix if releasing as final
-- [ ] Create tag: `git tag -a v1.0.0 -m "v1.0.0"` (only after review above)
-- [ ] Push tag: `git push origin v1.0.0` (only after tag is confirmed)
+- [x] Review CHANGELOG entry for accuracy -- remove "-rc.1" suffix if releasing as final
+- [x] Create tag: `git tag -a v1.0.0 -m "v1.0.0"` (only after review above)
+- [x] Push tag: `git push origin v1.0.0` (only after tag is confirmed)
 
 ### Must do before making the repository public
 
 - [ ] Decide branch protection / ruleset posture for `main` (require PR, require checks, no force push)
 - [ ] Decide whether to add `CODEOWNERS` (for single-maintainer: optional; for team: recommended)
 - [ ] Decide whether to add Dependabot config (`.github/dependabot.yml`; no runtime deps in v1, low urgency)
-- [ ] Decide whether to add CI workflows (e.g., run `verify-skill-package.sh` on PRs)
-- [ ] Enable GitHub private vulnerability reporting if not already enabled (required for SECURITY.md to function as documented)
+- [x] Add a minimal CI workflow that runs package and ASCII verification on pushes to `main` and pull requests
 - [ ] Review all tracked files once more for any private paths, email addresses, or local machine artifacts
 - [ ] Confirm repo description, topics, and website field in GitHub settings are set
 - [ ] Change repo visibility to public (GitHub Settings > Danger Zone > Change visibility)
+
+### Must do immediately after making the repository public
+
+- [ ] Enable GitHub private vulnerability reporting before announcing or treating the public release as complete
 
 ### Optional after public release
 

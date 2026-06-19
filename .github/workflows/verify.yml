@@ -1,0 +1,21 @@
+name: Verify
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Verify skill package
+        run: bash scripts/verify-skill-package.sh
+
+      - name: Check ASCII punctuation
+        run: bash scripts/check-ascii-punctuation.sh skills docs README.md CHANGELOG.md SECURITY.md CODE_OF_CONDUCT.md .github
