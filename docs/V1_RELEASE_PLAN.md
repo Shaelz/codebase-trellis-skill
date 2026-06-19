@@ -219,23 +219,53 @@ Acceptance:
 
 ---
 
-## Release checklist (v1.0)
+## Release checklist (v1.0.0)
 
-Before tagging v1.0.0:
+### Done for RC (complete as of 2026-06-19)
 
-- [ ] All phases through Phase 9 complete and validated
-- [ ] `bash scripts/verify-skill-package.sh` passes
-- [ ] `bash scripts/check-ascii-punctuation.sh` passes on all tracked files
-- [ ] Install scripts tested on Windows (PowerShell) and macOS/Linux (bash)
-- [ ] User-level install and project-local install both verified
-- [ ] README install instructions match actual script behavior
-- [ ] No old identity strings in any tracked file
-- [ ] CHANGELOG updated with v1.0.0 entry
-- [ ] SECURITY.md finalized for public release
-- [ ] CODE_OF_CONDUCT.md finalized for public release
-- [ ] `.github/` community files reviewed
-- [ ] Git tag `v1.0.0` created
-- [ ] GitHub repo visibility set to public (if applicable)
+- [x] All phases through Phase 9 complete and validated
+- [x] `bash scripts/verify-skill-package.sh` passes
+- [x] `bash scripts/check-ascii-punctuation.sh` passes on all tracked files
+- [x] Install scripts verified on Windows (PowerShell) and bash
+- [x] User-level install and project-local install both work and do not copy local settings
+- [x] README install instructions match actual script behavior (clone + run script)
+- [x] All modes listed in README: audit, start, commit, commit --execute, push, push --execute, finish, recover
+- [x] No old identity strings in any tracked file
+- [x] CHANGELOG updated with v1.0.0-rc.1 entry covering Phases 1-9
+- [x] SECURITY.md finalized for public release
+- [x] CODE_OF_CONDUCT.md finalized for public release
+- [x] `.github/` community files reviewed (CONTRIBUTING.md, PR template, issue templates)
+- [x] LICENSE is MIT with correct year and name
+- [x] docs/FUTURE_BRANCHES.md contains only non-v1 items; all v1 core items are implemented
+
+### Must do before creating the v1.0.0 tag
+
+- [ ] Final run of `bash scripts/verify-skill-package.sh`
+- [ ] Final run of `bash scripts/check-ascii-punctuation.sh skills docs README.md CHANGELOG.md SECURITY.md CODE_OF_CONDUCT.md`
+- [ ] Confirm `git tag --list` shows no existing v1.0.0 tag
+- [ ] Confirm `git status` is clean
+- [ ] Optional: smoke-install from a clean clone into a temp directory to verify the install path end-to-end
+- [ ] Review CHANGELOG entry for accuracy -- remove "-rc.1" suffix if releasing as final
+- [ ] Create tag: `git tag -a v1.0.0 -m "v1.0.0"` (only after review above)
+- [ ] Push tag: `git push origin v1.0.0` (only after tag is confirmed)
+
+### Must do before making the repository public
+
+- [ ] Decide branch protection / ruleset posture for `main` (require PR, require checks, no force push)
+- [ ] Decide whether to add `CODEOWNERS` (for single-maintainer: optional; for team: recommended)
+- [ ] Decide whether to add Dependabot config (`.github/dependabot.yml`; no runtime deps in v1, low urgency)
+- [ ] Decide whether to add CI workflows (e.g., run `verify-skill-package.sh` on PRs)
+- [ ] Enable GitHub private vulnerability reporting if not already enabled (required for SECURITY.md to function as documented)
+- [ ] Review all tracked files once more for any private paths, email addresses, or local machine artifacts
+- [ ] Confirm repo description, topics, and website field in GitHub settings are set
+- [ ] Change repo visibility to public (GitHub Settings > Danger Zone > Change visibility)
+
+### Optional after public release
+
+- [ ] Create a GitHub release from the v1.0.0 tag with the CHANGELOG entry as release notes
+- [ ] Add GitHub repo topics: `claude-code`, `git`, `skill`, `developer-tools`
+- [ ] Post announcement if relevant
+- [ ] Add CI badge to README if a workflow is added
 
 ## Non-goals for v1
 
