@@ -63,7 +63,7 @@ If an installation already exists, the scripts exit with an error unless you pas
 /codebase-trellis audit        # same as above
 /codebase-trellis start        # set up isolated branch or worktree
 /codebase-trellis commit       # plan commits (manual/read-only by default)
-/codebase-trellis commit --execute   # plan and execute commits after approval
+/codebase-trellis commit --execute   # execute commits after approval (not yet available)
 /codebase-trellis push         # plan push (manual by default)
 /codebase-trellis finish       # finish branch: PR, merge, keep, or discard
 /codebase-trellis recover      # recover from Git mistakes

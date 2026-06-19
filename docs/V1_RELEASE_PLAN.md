@@ -36,7 +36,7 @@ Acceptance:
 - risks clearly separated from recommendations
 - verification scripts pass on the package itself
 
-## Phase 2 - Commit planning manual mode
+## Phase 2 - Commit planning manual mode (complete)
 
 Deliverables:
 - `commit` mode, manual default
@@ -44,9 +44,10 @@ Deliverables:
 - staged/unstaged/untracked/deleted classification
 - sensitive-file exclusion
 - partial-staged detection
-- grouping by cohesion
-- commit-message generation
-- post-execution checklist
+- generated/build output detection
+- grouping by cohesion with reject conditions
+- commit plan output contract (author, signing, groups, exclusions, files requiring decision)
+- manual commands block with explicit "not executed" note
 
 Acceptance:
 - refuses or warns on sensitive files
@@ -58,6 +59,7 @@ Acceptance:
 - no direct commit execution
 - exact file lists in all commands
 - no AI trailer by default
+- execute mode stubbed with "not yet available" note
 
 ## Phase 3 - Commit execute mode
 
