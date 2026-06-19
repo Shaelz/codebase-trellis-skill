@@ -1611,37 +1611,210 @@ Emit a Trellis stop and halt when:
 
 ## `recover` mode
 
-Read-only first:
+Start read-only. Diagnose before suggesting commands. Never run any recovery command without exact approval.
+
+### Recover preflight
+
+Run all of the following before presenting options:
+
+```bash
+git rev-parse --show-toplevel 2>/dev/null || echo "ERROR: not a git repo"
+GIT_DIR=$(cd "$(git rev-parse --git-dir)" 2>/dev/null && pwd -P)
+GIT_COMMON=$(cd "$(git rev-parse --git-common-dir)" 2>/dev/null && pwd -P)
+git branch --show-current
+git rev-parse HEAD 2>/dev/null
+git status --short
+git status --porcelain=v2 --branch
+git diff --name-status
+git diff --cached --name-status
+git remote -v
+git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null || echo "no-upstream"
+git reflog --date=iso --max-count=15
+test -f "$GIT_DIR/MERGE_HEAD" && echo "merge-in-progress" || true
+test -d "$GIT_DIR/rebase-merge" -o -d "$GIT_DIR/rebase-apply" && echo "rebase-in-progress" || true
+test -f "$GIT_DIR/CHERRY_PICK_HEAD" && echo "cherry-pick-in-progress" || true
+test -f "$GIT_DIR/REVERT_HEAD" && echo "revert-in-progress" || true
+test -f "$GIT_DIR/index.lock" && echo "index-lock-present: $GIT_DIR/index.lock" || true
+test -f "$GIT_COMMON/index.lock" && echo "common-index-lock-present: $GIT_COMMON/index.lock" || true
+```
+
+Interpretation:
+
+- If not in a Git repo, emit a Trellis stop.
+- If `GIT_DIR != GIT_COMMON`, the current checkout is a linked worktree. Report which git dir was inspected for operation state and lock files.
+- Report each detected state clearly in the Tangle check.
+- Use reflog as supporting evidence for recent history, not certainty about user intent.
+
+### Recovery output contract
+
+```
+Trellis recovery report
+
+Root check
+- Repo root:         <path>
+- Branch:            <name or detached HEAD>
+- HEAD:              <full SHA>
+- Upstream:          <upstream ref or no-upstream>
+- Git dir:           <GIT_DIR>
+- Common git dir:    <GIT_COMMON>
+- Linked worktree:   <yes / no>
+- Dirty state:       <clean / N staged, M unstaged, K untracked>
+
+Tangle check
+- In-progress operation: <none / merge-in-progress / rebase-in-progress / cherry-pick-in-progress / revert-in-progress>
+- Staged files:      <list or none>
+- Unstaged files:    <list or none>
+- Untracked files:   <list or none>
+- Lock files:        <none / index.lock at <path>>
+- Reflog signals:    <recent entries relevant to the trouble state>
+- Risk:              <safe-to-inspect / requires-caution / destructive-potential>
+
+Recovery menu
+<Show only options relevant to the detected state. Do not list irrelevant options.>
+
+Safe / reversible:
+  1. Unstage files                          -- git restore --staged <path>
+  2. Abort in-progress operation            -- git merge/rebase/cherry-pick/revert --abort
+  3. Soft reset last commit (keep changes)  -- git reset --soft HEAD~1
+
+Caution:
+  4. Restore specific file from HEAD        -- git restore <path>
+  5. Remove stale index lock               -- rm <lock-path>
+
+Destructive:
+  6. Hard reset to HEAD (discards changes)  -- git reset --hard HEAD
+  7. Remove specific untracked path         -- git clean -f -- <path>
+  8. Delete branch                          -- git branch -D <name>
+
+Gate check
+- Exact approvals required:     <list for safe/caution options>
+- Typed confirmations required: <list for destructive options>
+- Forbidden by default:         git push --force / git clean -fdx / broad clean without path
+
+Next safe action
+- Recommendation: <most relevant safe action given the detected state>
+```
+
+### Approval contracts
+
+Safe / reversible -- exact phrase required:
+
+- Unstage: `unstage <path>`
+- Abort merge: `abort merge`
+- Abort rebase: `abort rebase`
+- Abort cherry-pick: `abort cherry-pick`
+- Abort revert: `abort revert`
+- Soft reset: `soft reset HEAD~1`
+
+Caution -- exact phrase required:
+
+- Restore file: `restore file <path>`
+- Remove stale lock: `remove stale git lock`
+
+Destructive -- typed confirmation required:
+
+- Hard reset: `hard reset <branch-name> to HEAD`
+- Remove untracked file: `remove untracked <path>`
+- Remove untracked directory: `remove untracked directory <path>`
+- Delete branch: `delete branch <branch-name>`
+
+Vague approval (`yes`, `ok`, `go`, `do it`) is not sufficient for any recovery operation.
+
+### Command behavior
+
+Safe commands -- execute after exact approval:
+
+```bash
+git restore --staged <path>    # unstage exact file
+git merge --abort              # abort in-progress merge
+git rebase --abort             # abort in-progress rebase
+git cherry-pick --abort        # abort in-progress cherry-pick
+git revert --abort             # abort in-progress revert
+git reset --soft HEAD~1        # soft reset last commit
+```
+
+Caution commands -- execute after exact approval and safety conditions met:
+
+```bash
+git restore <path>             # restore specific worktree file from HEAD
+```
+
+For stale lock removal, verify all of the following before accepting approval:
+
+- Lock file path is inside `GIT_DIR` or `GIT_COMMON`.
+- No operation is in progress (MERGE_HEAD, rebase-merge, rebase-apply, CHERRY_PICK_HEAD, REVERT_HEAD all absent).
+- Report the exact lock file path in the approval prompt.
+
+Destructive commands -- execute after typed confirmation only:
+
+```bash
+git reset --hard HEAD                    # discard tracked changes; never auto-targets a remote ref
+git clean -f -- <exact-path>             # specific untracked file only
+git clean -fd -- <exact-path>            # specific untracked directory only
+git branch -D <branch-name>              # only after switching to a different branch
+```
+
+Never use:
+
+- `git clean -fdx`
+- `git clean -fd` or `git clean -f` without an exact path argument
+- `git reset --hard <remote>/<branch>` unless explicitly requested by the user
+- `git push --force` or `git push --force-with-lease` as recovery actions
+- history rewrite as a casual default recovery path
+
+### Post-recovery verification
+
+After any approved recovery action, run:
 
 ```bash
 git status --short
-git status
-git reflog -10
-git log --oneline -10
+git status --porcelain=v2 --branch
+git reflog --date=iso --max-count=5
 ```
 
-Detect in-progress operations:
+Operation-specific checks:
 
-```bash
-git rev-parse -q --verify MERGE_HEAD 2>/dev/null && echo "merge in progress"
-git rev-parse -q --verify REBASE_HEAD 2>/dev/null && echo "rebase in progress"
-git rev-parse -q --verify CHERRY_PICK_HEAD 2>/dev/null && echo "cherry-pick in progress"
-```
+- After abort: verify operation marker is gone (`test -f "$GIT_DIR/MERGE_HEAD"` etc.)
+- After unstage: `git diff --cached --name-status` -- file must not appear
+- After soft reset: `git log --oneline -3` -- HEAD one commit earlier; `git diff --cached --name-status` -- changes staged
+- After hard reset: `git diff --stat` -- tracked changes absent; untracked files must still be present
+- After specific clean: `test -e "<path>"` -- path must be gone
+- After branch delete: `git branch --list <branch-name>` -- must return empty
 
-If a Git lock exists:
+Report before and after evidence for each action.
 
-```bash
-test -f .git/index.lock && echo "lock exists"
-```
+### Recover-mode stop conditions
 
-Only advise removing a stale lock after confirming no Git process is running.
+Emit a Trellis stop and halt when:
 
-Recovery defaults:
-- Prefer `git merge --abort`, `git rebase --abort`, or `git cherry-pick --abort` for in-progress operations.
-- Prefer `git reset --soft HEAD~1` for "undo last commit but keep changes".
-- Prefer `git restore --staged <file>` for accidental staging.
-- Prefer explicit file restore commands over broad restore.
-- Never run destructive reset or clean without typed confirmation.
+- Not inside a Git repo.
+- Requested operation does not match detected state.
+- Target path is not exact.
+- Target path is outside repo root or contains path traversal.
+- User approval is vague or mismatches required phrase.
+- Destructive confirmation does not exactly match required phrase.
+- Lock file exists but an operation is in progress.
+- Lock file path is outside detected `GIT_DIR` or `GIT_COMMON`.
+- Hard reset requested while untracked or sensitive-looking files are present and not separately handled.
+- Branch deletion requested for the currently checked-out branch.
+- Branch deletion requested while the branch is checked out in another worktree.
+- Reflog is needed but unavailable.
+- Recovery command fails.
+- Post-recovery verification fails.
+
+### Never in recover mode
+
+- `git push --force`
+- `git push --force-with-lease`
+- `git clean -fdx`
+- broad `git clean -fd` or `git clean -f` without exact path
+- `git reset --hard <remote>/<branch>` unless explicitly requested
+- history rewrite as a casual default recovery path
+- removing lock files while an operation is in progress
+- removing lock files outside the detected git dir
+- branch deletion without typed confirmation
+- hard reset without typed confirmation
+- continuing after command failure
 
 ---
 

@@ -166,20 +166,30 @@ Acceptance:
 - branch protection unavailability not collapsed into "not protected"
 - real-repo read-only smoke verified: Shaelz/codebase-trellis-skill (PRIVATE, branch protection plan-limited, rulesets plan-limited, no workflows, Dependabot/secret scanning/code scanning all not-configured)
 
-## Phase 8 - Recovery playbook
+## Phase 8 - Recovery playbook (complete)
 
 Deliverables:
-- `recover` mode
-- in-progress merge/rebase/cherry-pick detection
-- reflog-based recovery guidance
-- stale lock handling
-- soft reset guidance
-- accidentally staged file guidance
+- `recover` mode with full preflight (all in-progress operations, lock files, staged/unstaged/untracked, reflog)
+- in-progress detection: merge/rebase/cherry-pick/revert via marker files and directories
+- linked-worktree awareness: GIT_DIR vs GIT_COMMON distinction for lock file inspection
+- recovery output contract: Root check / Tangle check / Recovery menu / Gate check / Next safe action
+- approval contracts: exact phrases for safe/caution/destructive tiers
+- safe commands: unstage, abort (merge/rebase/cherry-pick/revert), soft reset
+- caution commands: restore specific file, remove stale lock (with pre-conditions)
+- destructive commands: hard reset (typed), specific-path clean (typed), branch delete (typed)
+- post-recovery verification for each action
+- recover-mode stop conditions (14 conditions)
+- Never-in-recover-mode list (11 items)
 
 Acceptance:
 - read-only first
-- destructive operations require typed confirmation
+- in-progress operations detected via marker files
+- lock file removal requires no-in-progress confirmation and path inside GIT_DIR
+- hard reset does not remove untracked files
+- only exact-path clean allowed (no git clean -fdx or broad clean)
+- branch deletion blocked for current branch
 - no force push as recovery default
+- all nine smoke scenarios passed (A: unstage, B: merge abort, C: rebase abort, D: cherry-pick abort, E: soft reset, F: stale lock removal, G: hard reset, H: exact-path clean, I: branch-delete stop condition)
 
 ## Phase 9 - Live-fire and hardening
 
