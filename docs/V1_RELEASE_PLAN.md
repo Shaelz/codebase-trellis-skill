@@ -142,18 +142,29 @@ Acceptance:
 - no worktree removal after PR preparation
 - all eight smoke scenarios passed (A: PR plan-only, B: push+PR plan-only, C: keep as-is, D: local merge, E: discard normal branch, F: discard linked worktree, G: dirty gate, H: PR state unavailable)
 
-## Phase 7 - GitHub posture audit
+## Phase 7 - GitHub posture audit (complete)
 
 Deliverables:
-- read-only checks for branch protection, rulesets, required checks
-- review requirements
-- security feature visibility
-- SECURITY.md, CODEOWNERS, PR template presence
+- expanded `audit` mode with full GitHub posture checks when `gh` is available
+- local community file checks (README/LICENSE/SECURITY/CODE_OF_CONDUCT/CONTRIBUTING/CODEOWNERS/PR template/issue templates/Dependabot config/workflows dir)
+- GitHub availability gate (non-GitHub remote or gh unavailable handled explicitly)
+- repository identity check (nameWithOwner/visibility/archived/fork)
+- branch protection check with per-field reporting
+- rulesets check with active count
+- CI/workflow presence check
+- security feature checks: Dependabot alerts, secret scanning, code scanning, security advisories
+- error shape categorization table (7 categories: auth / plan-limited / permission-limited / not-configured / not-verified / no-data / non-GitHub)
+- GitHub posture output contract with all fields and honest labels
+- posture recommendations block (required / useful / optional / not-verified)
 
 Acceptance:
-- no settings changed automatically
-- limitations reported if `gh` lacks permissions
-- no overclaiming on plan-dependent features
+- no GitHub settings changed
+- plan-limited reported as plan-limited (not as disabled or not configured)
+- permission-limited reported separately from feature-disabled
+- no claim that "no alerts = clean"
+- workflows absent != no CI == green
+- branch protection unavailability not collapsed into "not protected"
+- real-repo read-only smoke verified: Shaelz/codebase-trellis-skill (PRIVATE, branch protection plan-limited, rulesets plan-limited, no workflows, Dependabot/secret scanning/code scanning all not-configured)
 
 ## Phase 8 - Recovery playbook
 

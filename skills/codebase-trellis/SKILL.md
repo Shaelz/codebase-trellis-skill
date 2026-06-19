@@ -403,10 +403,14 @@ Supported modes:
 
 ## `audit` mode
 
-Run read-only diagnostics. Produce a Trellis report.
+Run read-only diagnostics. Produce a Trellis report. Never modify any local or remote state.
+
+### Audit preflight -- local Git
+
+Always run first, regardless of `gh` availability:
 
 ```bash
-git rev-parse --show-toplevel
+git rev-parse --show-toplevel 2>/dev/null || echo "ERROR: not a git repo"
 git branch --show-current
 git status --short
 git diff --stat
@@ -415,37 +419,184 @@ git log --oneline -10
 git remote -v
 git config --show-origin --show-scope --get user.name 2>/dev/null || echo "unset"
 git config --show-origin --show-scope --get user.email 2>/dev/null || echo "unset"
+git config commit.gpgsign 2>/dev/null || echo "unset"
 ```
 
-If `gh` is available, run read-only GitHub diagnostics:
+### Audit preflight -- community file checks
+
+Check presence/absence of each file locally. Presence/absence is a verified fact; content quality is not:
 
 ```bash
-gh repo view --json nameWithOwner,visibility,defaultBranchRef
-gh pr status
-gh run list --limit 5
+test -f README.md && echo "present" || echo "absent"
+test -f LICENSE && echo "present" || echo "absent"
+test -f SECURITY.md && echo "present" || echo "absent"
+test -f CODE_OF_CONDUCT.md && echo "present" || echo "absent"
+test -f CONTRIBUTING.md || test -f .github/CONTRIBUTING.md && echo "present" || echo "absent"
+test -f .github/PULL_REQUEST_TEMPLATE.md && echo "present" || echo "absent"
+test -d .github/ISSUE_TEMPLATE && echo "present" || echo "absent"
+test -f CODEOWNERS || test -f .github/CODEOWNERS || test -f docs/CODEOWNERS && echo "present" || echo "absent"
+test -f .github/dependabot.yml || test -f .github/dependabot.yaml && echo "present" || echo "absent"
+test -d .github/workflows && echo "present" || echo "absent"
 ```
 
-If supported and authorized, also inspect repository protection posture:
+### GitHub posture -- availability gate
+
+Before running any `gh` command:
+
+1. Check if a GitHub remote is present: `git remote -v | grep github.com`
+2. Check if `gh` is available: `gh auth status 2>/dev/null`
+
+If no GitHub remote is detected: report all GitHub posture fields as `unavailable -- non-GitHub remote`.
+
+If `gh` is unavailable or auth fails: report all GitHub posture fields as `unavailable -- gh not authenticated`.
+
+Do not attempt any `gh` call if the gate fails.
+
+### GitHub posture -- repository identity
 
 ```bash
-gh api repos/:owner/:repo/branches
-gh api repos/:owner/:repo/rulesets
-gh api repos/:owner/:repo/dependabot/alerts
-gh api repos/:owner/:repo/secret-scanning/alerts
-gh api repos/:owner/:repo/code-scanning/alerts
+gh repo view --json nameWithOwner,visibility,defaultBranchRef,isArchived,isFork,mergeCommitAllowed,squashMergeAllowed,rebaseMergeAllowed,autoMergeAllowed,deleteBranchOnMerge,hasIssuesEnabled,hasWikiEnabled,hasDiscussionsEnabled 2>/dev/null
 ```
 
-If a `gh api` call fails, report the limitation. Do not infer safety from failure. Categorize by error shape:
+Report each field. If any field is absent or the call fails, mark that field as `not verified`.
 
-- `"Upgrade to GitHub Pro or make this repository public"` (403): plan limitation -- feature unavailable on free private repos.
-- `"needs the ... scope"` in message (403): permission gap -- suggest `gh auth refresh -h github.com -s <scope>`.
-- `"disabled for this repository"` (403/404): feature is off -- enable in repo settings if desired.
-- `"not enabled for this repository"` (403): feature not configured -- enable in repo settings if desired.
-- Any other failure: report raw error and continue.
+### GitHub posture -- branch protection
 
-Always report as: `Protection state: not verified. Do not assume main is protected.`
+```bash
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+DEFAULT=$(gh repo view --json defaultBranchRef --jq '.defaultBranchRef.name' 2>/dev/null)
+gh api repos/:owner/:repo/branches/$DEFAULT/protection 2>/dev/null
+```
 
-Output: full or short Trellis report as appropriate.
+Interpret:
+
+- HTTP 200 with data: report each sub-field (required status checks, required reviews, signed commits, force-push restrictions, deletion restrictions) as `verified` with the value.
+- HTTP 403 "plan-limited": mark branch protection state as `plan-limited`.
+- HTTP 403 permission gap: mark as `permission-limited`.
+- HTTP 404 "branch not protected": mark as `not configured`.
+- Any other error: mark as `not verified` with the error summary.
+
+Never infer protection state from a failure. Absence of data is `not verified`, not `not configured`.
+
+### GitHub posture -- rulesets
+
+```bash
+gh api repos/:owner/:repo/rulesets 2>/dev/null
+```
+
+Interpret:
+
+- HTTP 200 with data: count active rulesets and note they may overlap with branch protection.
+- HTTP 200 empty array: mark as `not configured`.
+- HTTP 403 plan-limited: mark as `plan-limited`.
+- HTTP 403 permission: mark as `permission-limited`.
+- HTTP 404: mark as `unavailable`.
+
+Note: rulesets and branch protection rules can coexist. A clean ruleset result does not mean branch protection is absent.
+
+### GitHub posture -- CI and required checks
+
+```bash
+gh workflow list 2>/dev/null
+gh run list --branch "$DEFAULT" --limit 10 2>/dev/null
+```
+
+Interpret:
+
+- Workflows absent: report `no .github/workflows/ directory detected locally` (cross-check with local file check).
+- Runs present: summarize recent runs by status and branch. Always include the SHA of each run.
+- Never treat "workflow exists" as "required check exists."
+- Never treat "recent run green" as "required checks passed."
+- Required checks are only verified if branch protection or ruleset data proves they are configured.
+
+### GitHub posture -- security features
+
+Run each call separately. Categorize each independently:
+
+```bash
+gh api repos/:owner/:repo/dependabot/alerts 2>/dev/null
+gh api repos/:owner/:repo/secret-scanning/alerts 2>/dev/null
+gh api repos/:owner/:repo/code-scanning/alerts 2>/dev/null
+gh api repos/:owner/:repo/security-advisories 2>/dev/null
+```
+
+Categorize each result using the error shape rules below.
+
+Never claim "no alerts found" means "clean." An empty result may mean no alerts or may mean the feature is not configured or not accessible.
+
+### GitHub posture -- error shape categorization
+
+Classify every `gh` / `gh api` failure by shape. Do not infer from one category to another:
+
+| Error shape | Label |
+|---|---|
+| `gh auth status` fails / not logged in | `unavailable -- gh not authenticated` |
+| 403 + "Upgrade to GitHub Pro" or "make this repository public" | `plan-limited` |
+| 403 + "needs the ... scope" | `permission-limited -- missing OAuth scope` |
+| 403 + "disabled for this repository" | `not configured -- feature off` |
+| 403 + "not enabled for this repository" | `not configured -- feature not enabled` |
+| 404 + "Branch not protected" | `not configured` |
+| 404 (other cause unclear) | `not verified -- endpoint unavailable` |
+| 200 + empty list | `no data -- feature may be configured but no results` |
+| Non-GitHub remote | `unavailable -- not a GitHub remote` |
+
+Report the label and the raw error fragment. Do not rephrase failures as safety assertions.
+
+### GitHub posture output contract
+
+Produce this block in the Canopy check:
+
+```
+GitHub posture
+  Repository:    <owner/name> (<visibility: public/private/internal>) [archived: yes/no] [fork: yes/no]
+  Default branch: <name>
+  Branch protection: <verified -- <summary> / not configured / plan-limited / permission-limited / not verified>
+    Required status checks:   <verified / not configured / not verified>
+    Required approving reviews: <verified -- N / not configured / not verified>
+    Signed commits required:  <verified / not configured / not verified>
+    Force-push restrictions:  <verified / not configured / not verified>
+    Deletion restrictions:    <verified / not configured / not verified>
+  Rulesets:      <verified -- N active / not configured / plan-limited / permission-limited / unavailable>
+  Required checks: <verified -- <list> / not configured / not verified>
+  Recent CI:     <runs summary with SHA, or not verified>
+  Merge settings: <merge-commit: yes/no | squash: yes/no | rebase: yes/no | auto-merge: yes/no | delete-on-merge: yes/no, or not verified>
+  Community files:
+    README:           <present / absent>
+    LICENSE:          <present / absent>
+    SECURITY.md:      <present / absent>
+    CODE_OF_CONDUCT:  <present / absent>
+    CONTRIBUTING:     <present / absent>
+    CODEOWNERS:       <present / absent>
+    PR template:      <present / absent>
+    Issue templates:  <present / absent>
+    Dependabot config: <present / absent>
+    Workflows dir:    <present / absent>
+  Security features:
+    Secret scanning:  <verified -- enabled/disabled / not configured / plan-limited / permission-limited / unavailable>
+    Push protection:  <verified / not configured / plan-limited / permission-limited / unavailable>
+    Dependabot alerts: <verified / not configured / plan-limited / permission-limited / unavailable>
+    Code scanning:    <verified / not configured / plan-limited / permission-limited / unavailable>
+    Security advisories: <verified / not configured / plan-limited / permission-limited / unavailable>
+  Repository settings (if visible):
+    Issues: <enabled/disabled/not verified> | Wiki: <enabled/disabled/not verified> | Discussions: <enabled/disabled/not verified>
+  Unknowns: <explicit list of fields that could not be verified>
+```
+
+### Posture recommendations
+
+After the GitHub posture block, include:
+
+```
+Posture recommendations
+  Required before public release:  <list -- suggestions only, not commands>
+  Useful before public release:    <list>
+  Optional / later:                <list>
+  Not verified / check manually:   <list>
+```
+
+Recommendations are suggestions only. Do not execute them.
+
+Output: full Trellis report with the GitHub posture block in Canopy check. Use short form only if the repo is entirely local with no GitHub remote.
 
 ---
 
