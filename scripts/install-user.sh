@@ -9,7 +9,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SOURCE_DIR="$(cd "$SCRIPT_DIR/../skills/codebase-trellis" && pwd)"
-DEST_DIR="$HOME/.claude/skills/codebase-trellis"
+EXPECTED_PARENT_DIR="$HOME/.claude/skills"
+DEST_DIR="$EXPECTED_PARENT_DIR/codebase-trellis"
 
 FORCE=false
 for arg in "$@"; do
@@ -22,13 +23,18 @@ done
 echo "Source : $SOURCE_DIR"
 echo "Dest   : $DEST_DIR"
 
-if [ -d "$DEST_DIR" ]; then
+if [ -e "$DEST_DIR" ] || [ -L "$DEST_DIR" ]; then
     if [ "$FORCE" = false ]; then
         echo "Error: destination already exists: $DEST_DIR" >&2
         echo "Re-run with --force to overwrite." >&2
         exit 1
     fi
-    echo "[--force] Overwriting existing installation."
+    if [ "$(dirname "$DEST_DIR")" != "$EXPECTED_PARENT_DIR" ] || [ "$(basename "$DEST_DIR")" != "codebase-trellis" ]; then
+        echo "Error: refusing to remove unexpected destination: $DEST_DIR" >&2
+        exit 1
+    fi
+    echo "[--force] Removing existing installation."
+    rm -rf -- "$DEST_DIR"
 fi
 
 mkdir -p "$DEST_DIR"

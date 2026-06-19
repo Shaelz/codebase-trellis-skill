@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- Updated the quickstart to install from the exact current stable release tag,
+  `v1.0.0`, and documented that the pin must move with future releases.
+- Changed force installs to replace the validated destination directory so stale files
+  cannot survive across versions.
+- Added a GitHub hardening checklist for repository-side enforcement alongside Trellis.
+
 ## [1.0.0] - 2026-06-19
 
 First stable release of `codebase-trellis`.

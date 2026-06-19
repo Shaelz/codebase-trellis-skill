@@ -6,8 +6,9 @@
     Run this from the root of the project where you want to install the skill.
 
 .PARAMETER Force
-    Overwrite an existing installation. Without this flag the script exits if the
-    destination already exists.
+    Replace an existing installation. Without this flag the script exits if the
+    destination already exists. Replacement removes the validated skill directory
+    before copying so stale files cannot survive.
 
 .EXAMPLE
     .\path\to\install-project.ps1
@@ -23,7 +24,9 @@ $ErrorActionPreference = 'Stop'
 
 $scriptDir  = Split-Path -Parent $MyInvocation.MyCommand.Path
 $sourceDir  = Join-Path $scriptDir '..\skills\codebase-trellis'
-$destDir    = Join-Path (Get-Location) '.claude\skills\codebase-trellis'
+$projectRoot    = [System.IO.Path]::GetFullPath((Get-Location).Path)
+$expectedParent = [System.IO.Path]::GetFullPath((Join-Path $projectRoot '.claude\skills'))
+$destDir        = [System.IO.Path]::GetFullPath((Join-Path $expectedParent 'codebase-trellis'))
 
 $sourceDir = (Resolve-Path $sourceDir).Path
 
@@ -35,7 +38,17 @@ if (Test-Path $destDir) {
         Write-Error "Destination already exists: $destDir`nRe-run with -Force to overwrite."
         exit 1
     }
-    Write-Host "[-Force] Overwriting existing installation."
+    $hasExpectedParent = [System.StringComparer]::OrdinalIgnoreCase.Equals(
+        [System.IO.Path]::GetDirectoryName($destDir),
+        $expectedParent
+    )
+    $hasExpectedLeaf = [System.IO.Path]::GetFileName($destDir) -eq 'codebase-trellis'
+    if (-not $hasExpectedParent -or -not $hasExpectedLeaf) {
+        Write-Error "Refusing to remove unexpected destination: $destDir"
+        exit 1
+    }
+    Write-Host "[-Force] Removing existing installation."
+    Remove-Item -LiteralPath $destDir -Recurse -Force
 }
 
 if (-not (Test-Path $destDir)) {

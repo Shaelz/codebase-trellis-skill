@@ -23,13 +23,16 @@ It is not a Git command wrapper. The default behavior is inspection and planning
 
 ## Quickstart
 
-Clone this repository locally first, then run the install script from the repository root.
+Clone this repository locally, check out the exact release tag, then run the install
+script from the repository root.
 
 **Claude Code - PowerShell**
 
 ```powershell
 git clone https://github.com/Shaelz/codebase-trellis-skill.git
 cd codebase-trellis-skill
+git fetch --tags
+git checkout v1.0.0
 .\scripts\install-user.ps1
 ```
 
@@ -38,10 +41,16 @@ cd codebase-trellis-skill
 ```bash
 git clone https://github.com/Shaelz/codebase-trellis-skill.git
 cd codebase-trellis-skill
+git fetch --tags
+git checkout v1.0.0
 bash scripts/install-user.sh
 ```
 
 Then restart Claude Code and type `/codebase-trellis` in any project.
+
+These commands intentionally pin the current published stable release, `v1.0.0`.
+The pinned tag must be updated here whenever a newer release is published.
+Advanced users may install from `main` only when intentionally testing unreleased changes.
 
 ## Install paths
 
@@ -54,7 +63,11 @@ Then restart Claude Code and type `/codebase-trellis` in any project.
 
 User-level install makes the skill available in all projects. Project-local install adds it only to the current project's `.claude/skills/` directory. For project-local installs, navigate to your project root first, then call the script using the full path to where you cloned this repo.
 
-If an installation already exists, the scripts exit with an error unless you pass `-Force` (PowerShell) or `--force` (bash).
+If an installation already exists, the scripts exit with an error unless you pass
+`-Force` (PowerShell) or `--force` (bash). In the current unreleased source, force
+mode removes the existing `codebase-trellis` skill directory after validating its exact
+expected path, then copies the selected version. This prevents stale files from surviving
+an upgrade. The published `v1.0.0` scripts predate this replacement behavior.
 
 ## Usage
 
@@ -89,6 +102,9 @@ Trellis operates within four safety layers:
 4. **GitHub protections** - branch protection, rulesets, secret scanning, merge queue
 
 These layers are not equivalent. A skill rule does not substitute for a protected branch. A local grep does not substitute for GitHub secret scanning.
+
+For a practical enforcement checklist, see
+[GitHub hardening for Trellis](docs/github-hardening.md).
 
 ## What Trellis never does without explicit approval
 
