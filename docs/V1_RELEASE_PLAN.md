@@ -231,7 +231,7 @@ Acceptance:
 - [x] README install instructions match actual script behavior (clone + run script)
 - [x] All modes listed in README: audit, start, commit, commit --execute, push, push --execute, finish, recover
 - [x] No old identity strings in any tracked file
-- [x] CHANGELOG updated with v1.0.0-rc.1 entry covering Phases 1-9
+- [x] CHANGELOG updated with v1.0.0 entry covering Phases 1-9
 - [x] SECURITY.md finalized for public release
 - [x] CODE_OF_CONDUCT.md finalized for public release
 - [x] `.github/` community files reviewed (CONTRIBUTING.md, PR template, issue templates)
