@@ -301,10 +301,11 @@ The Trellis report is the signature output of every inspection or planning pass.
 Trellis report
 
 Root check
-- Repo root:
+- Repo root:     <current working dir; if linked worktree, this is the worktree path>
+- Main repo:     <parent repo root, derived from GIT_COMMON if linked worktree; omit if not a linked worktree>
 - Branch:
 - Remote/upstream:
-- Worktree state:
+- Worktree state: <linked worktree at <path> / main repo checkout / detached HEAD>
 - Identity/signing state:
 - Baseline dirty files (pre-existing):
 
@@ -595,6 +596,8 @@ Posture recommendations
 ```
 
 Recommendations are suggestions only. Do not execute them.
+
+In the Trellis report Tangle check, include any sensitive-looking untracked files found in the local working tree (`.env.*`, `*.key`, `*.pem`, etc.). Do not wait for commit mode to surface them. Do not claim "no secrets found" from their absence -- only their presence can be confirmed locally.
 
 Output: full Trellis report with the GitHub posture block in Canopy check. Use short form only if the repo is entirely local with no GitHub remote.
 
@@ -942,11 +945,12 @@ Lock files (`package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, `Cargo.lock`, `p
 Apply in order after classification:
 
 1. Already staged files: respect as user intent. Audit for mixed concerns. If staged files span unrelated concerns, warn and ask whether to split.
-2. Same feature or module: files sharing a package, directory, or named feature belong together.
-3. Source plus corresponding tests: a source file and its matching test file changed together belong in one group.
-4. Pure docs: markdown, prose, or comment-only changes without corresponding source changes -- one group.
-5. Pure config or dependencies: config files and lock file updates -- one group per concern.
-6. Remaining files: do not force-fit. Split conservatively and ask the user.
+2. Package or workspace boundary (monorepo): if multiple `package.json`, `Cargo.toml`, `pyproject.toml`, or similar manifests exist at different directory depths, treat each package/workspace as a primary grouping boundary. Files within `apps/`, `packages/`, `services/`, or named workspace dirs are grouped by their closest manifest, not mixed across packages.
+3. Same feature or module: files sharing a directory or named feature within the same package belong together.
+4. Source plus corresponding tests: a source file and its matching test file changed together belong in one group.
+5. Pure docs: markdown, prose, or comment-only changes without corresponding source changes -- one group.
+6. Pure config or dependencies: config files and lock file updates -- one group per concern.
+7. Remaining files: do not force-fit. Split conservatively and ask the user.
 
 Do not produce a grouping that:
 - Mixes a feature change with unrelated docs or config.

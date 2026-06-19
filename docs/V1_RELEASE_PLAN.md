@@ -191,18 +191,21 @@ Acceptance:
 - no force push as recovery default
 - all nine smoke scenarios passed (A: unstage, B: merge abort, C: rebase abort, D: cherry-pick abort, E: soft reset, F: stale lock removal, G: hard reset, H: exact-path clean, I: branch-delete stop condition)
 
-## Phase 9 - Live-fire and hardening
+## Phase 9 - Live-fire and hardening (complete)
 
-Test cases:
-- clean tiny repo
-- dirty repo with unrelated files
-- repo with `.env` and ignored files
-- repo with pre-existing dirty state
-- repo with failing tests
-- monorepo
-- worktree repo
-- private GitHub repo with limited `gh` permissions
-- public repo with branch protections
+Test cases run:
+- A: clean tiny repo (no remote) -- audit + start
+- B: dirty repo with unrelated files -- audit + commit
+- C: repo with .env.local + ignored files -- audit + commit
+- D: repo with pre-existing dirty state + agent change -- commit
+- E: linked worktree repo -- audit + start + finish plan-only
+- F: private GitHub repo (codebase-trellis-skill) -- audit read-only
+- H: monorepo (apps/ + packages/) -- audit + commit
+
+Gaps found and fixed:
+1. Audit mode Tangle check: added explicit instruction to surface sensitive-looking untracked files (not just in commit mode)
+2. Root check in linked worktrees: added Main repo field showing GIT_COMMON parent, so worktree path vs. main repo root is unambiguous
+3. Commit grouping: added package/workspace boundary as primary grouping axis for monorepo structured passes (step 2, before same-feature grouping)
 
 Acceptance:
 - no unintended tracked changes
@@ -210,6 +213,9 @@ Acceptance:
 - no hidden file inclusion
 - no hallucinated GitHub posture
 - reports are concise enough to use repeatedly
+- sensitive untracked files surface in audit Tangle check, not only in commit mode
+- linked worktree root vs main repo root is reported separately
+- monorepo changes grouped by package boundary first
 
 ---
 
