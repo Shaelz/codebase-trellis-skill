@@ -61,13 +61,14 @@ Acceptance:
 - no AI trailer by default
 - execute mode stubbed with "not yet available" note
 
-## Phase 3 - Commit execute mode
+## Phase 3 - Commit execute mode (complete)
 
 Deliverables:
 - `commit --execute`
 - full commit plan approval
 - one group at a time
 - stop on first failure
+- pre-stage index check before each group
 - final `git status --short`
 - post-commit message verification
 

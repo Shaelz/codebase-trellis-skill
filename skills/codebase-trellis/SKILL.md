@@ -504,7 +504,7 @@ After creation, run project setup and baseline checks based on repo conventions.
 
 Default: manual mode. Do not execute `git add`, `git commit`, or any other Git state-changing command. Output a commit plan and copyable commands for user review only.
 
-If `--execute` is passed, see the execute sub-mode at the end of this section. Execute mode is not yet available.
+If `--execute` is passed, see the execute sub-mode at the end of this section.
 
 ### Preflight
 
@@ -662,9 +662,145 @@ Emit a Trellis stop (stop form) and omit staging commands for affected files whe
 
 ### Execute mode
 
-Not yet available. If `--execute` is passed, output the manual plan and add:
+Active only when `--execute` is explicitly passed. Manual mode is the default and remains read-only.
 
-`Execute mode is not yet available. The manual plan above contains exact commands you can run.`
+**Step 1 -- Plan first**
+
+Run the full read-only preflight and commit plan (same as manual mode). Show all groups, stop conditions, and exclusions before any mutation. Do not begin execution until the plan is shown.
+
+If any stop condition is present, output the relevant Trellis stop forms. Groups with stop conditions cannot be executed. Groups without stop conditions may proceed if explicitly approved.
+
+**Step 2 -- Pre-execution state check**
+
+Before executing any group, re-verify the working tree matches the planned state:
+
+```bash
+git status --short
+```
+
+If the output differs from the classified state in the plan, stop:
+
+```
+Trellis stop
+- Stop reason: Working tree changed since the plan was generated.
+- Evidence: <diff between plan state and current git status output>
+- Risk if ignored: Staging from a stale plan may capture or miss changes not in the approved group.
+- Safe recovery options: Re-run /codebase-trellis commit --execute to generate a fresh plan.
+- Recommended option: Re-run.
+```
+
+**Step 3 -- Per-group approval**
+
+Before executing each group, display the group contents and require exact typed approval:
+
+```
+Ready to execute Group <N> -- <label>:
+  Files:
+    <file1>
+    <file2>
+  Message: "<commit message>"
+
+Approve executing Group <N> only?
+Reply exactly: execute group <N>
+```
+
+Approval rules:
+
+- `yes`, `ok`, `go`, `sure`, or any vague approval is not sufficient.
+- The reply must contain the exact phrase `execute group <N>` where N matches the group number shown.
+- Approval for one group does not carry to any later group. Ask again before each.
+- If the user requests all groups at once (`execute all groups` or similar), stop and request one group at a time.
+- Ambiguous or mismatched approval means stop.
+
+**Step 4 -- Execute each approved group**
+
+For each approved group, in order:
+
+1. Before staging, check whether any files outside the approved group are already in the index:
+
+```bash
+git diff --cached --name-status
+```
+
+If any staged files appear that are not in the approved group's exact file list, stop:
+
+```
+Trellis stop
+- Stop reason: Pre-existing staged files outside the approved group.
+- Evidence: <list of unexpected staged files from git diff --cached --name-status>
+- Risk if ignored: Committing would include staged changes not in the approved group.
+- Safe recovery options:
+    a) git restore --staged <unexpected-file> -- unstage the extra file(s), then re-approve this group.
+    b) Re-plan to include the pre-staged files in a group.
+- Recommended option: (a) then re-approve this group.
+```
+
+2. Stage the exact listed files only:
+
+```bash
+git add <file1> <file2> ...
+```
+
+Never use `git add .`. Never stage any file not in the approved group's exact file list.
+Never stage sensitive-looking, generated-policy-unknown, undecided-untracked, partially staged, or excluded files regardless of approval.
+
+3. If `git add` fails for any file, emit a Trellis stop and do not proceed to commit.
+
+4. Commit with the approved message:
+
+```bash
+git commit -m "$(cat <<'EOF'
+<message>
+
+EOF
+)"
+```
+
+5. If `git commit` fails, emit a Trellis stop and do not proceed to the next group.
+
+6. After a successful commit, verify and report:
+
+```bash
+git log --oneline -1
+git log -1 --format='%H'
+git log -1 --format='%B'
+git status --short
+```
+
+7. Report the result in this format:
+
+```
+Group <N> committed.
+SHA: <full commit SHA>
+Message: <commit subject>
+Remaining dirty files: <list from git status --short, or "none">
+```
+
+8. Do not proceed to the next group automatically. Show the remaining group plan and ask for fresh approval before each subsequent group.
+
+**Execute mode stop conditions**
+
+Emit a Trellis stop and halt for the affected group when:
+
+- Approval is absent, vague, or does not match `execute group <N>`.
+- The group contains sensitive-looking files.
+- The group contains generated-policy-unknown files.
+- The group contains undecided untracked files.
+- The group contains a partially staged file.
+- Working tree state changed since the plan was generated.
+- Files outside the approved group are already staged in the index.
+- `git add` fails.
+- `git commit` fails.
+- Post-commit SHA verification fails or is not returned.
+
+**Never in execute mode**
+
+- `git add .`
+- staging any file not in the approved group's exact file list
+- executing a group that has a stop condition
+- proceeding to the next group without fresh explicit approval
+- pushing to any remote
+- merging, rebasing, deleting branches, or removing worktrees
 
 Never run `git add` or `git commit` in manual mode regardless of flags or requests.
 
