@@ -1033,20 +1033,38 @@ Never push from commit mode.
 
 ## `push` mode
 
-Default: manual plan only. Do not execute push unless `--execute` is present.
+Default: manual plan only. Read-only unless `--execute` is explicitly passed.
 
-Preflight:
+### Push preflight
+
+Run all of the following before proposing anything:
 
 ```bash
-BRANCH=$(git rev-parse --abbrev-ref HEAD)
+git rev-parse --show-toplevel 2>/dev/null || echo "ERROR: not a git repo"
+BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
 git status --short
 git remote -v
-git rev-parse HEAD
+git rev-parse HEAD 2>/dev/null
 git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null || echo "no-upstream"
-git rev-list --count @{u}..HEAD 2>/dev/null || echo "new-or-no-upstream"
+git rev-list --count @{u}..HEAD 2>/dev/null || echo "no-upstream"
+git rev-list --count HEAD..@{u} 2>/dev/null || echo "no-upstream"
 ```
 
-Protected branch patterns -- these require a separate warning:
+Interpretation:
+
+- If not in a Git repo, emit a Trellis stop and halt.
+- If HEAD is detached (`BRANCH` is empty or `HEAD`), emit a Trellis stop.
+- If `git status --short` returns any output, emit a Trellis stop: dirty working tree.
+- If `git remote -v` is empty, emit a Trellis stop: no remote configured.
+- If upstream is `no-upstream`, propose `git push -u origin <branch>` and require explicit approval.
+- If ahead count is 0 and upstream exists and no new upstream is needed, emit a Trellis stop: nothing to push.
+- If behind count is greater than 0 and ahead count is 0, emit a Trellis stop: branch is behind upstream.
+- If both ahead and behind counts are non-zero, emit a Trellis stop: branch has diverged from upstream.
+
+### Protected branch detection
+
+Check whether the current branch matches any of these patterns:
+
 ```
 main
 master
@@ -1054,33 +1072,175 @@ develop
 release/*
 ```
 
-If the current branch matches a protected pattern, require a typed branch-name confirmation before any execute path.
+Matching is exact for `main`, `master`, `develop`, and prefix-based for `release/*`.
 
-Push rules:
-- `git push --force` is forbidden.
-- `--force-with-lease` is allowed only when explicitly requested and approved.
-- If there is no upstream, propose `git push -u origin <branch>`.
-- If push fails, stop. Do not try `--force-with-lease` automatically.
+If matched:
 
-Push plan:
+1. Report the match prominently in the Tangle check.
+2. In execute mode, require the stronger approval phrase: `push protected branch <branch-name>`
+3. The normal `push branch <branch-name>` phrase is not sufficient for protected branches.
+
+### Push plan output
+
+After preflight, produce the push plan. Use the correct form based on upstream state.
+
+**New upstream (no upstream configured):**
 
 ```
-Push plan:
-- branch:
-- remote:
-- upstream:
-- commits ahead:
-- HEAD SHA:
-- command:
+Push plan
+  Branch:         <name>
+  Remote:         origin
+  Upstream:       none -- will be set to origin/<name>
+  Commits ahead:  <N> new commits
+  HEAD SHA:       <full SHA>
+  Command:        git push -u origin <name>
+  Protected:      <yes -- matches pattern <pattern> / no>
 ```
 
-After successful push, if `gh` is available:
+**Existing upstream:**
+
+```
+Push plan
+  Branch:         <name>
+  Remote:         <remote>
+  Upstream:       <upstream ref>
+  Commits ahead:  <N>
+  Commits behind: 0
+  HEAD SHA:       <full SHA>
+  Command:        git push
+  Protected:      <yes -- matches pattern <pattern> / no>
+```
+
+### Push approval contract
+
+Normal branch push (existing upstream):
+
+- Show the exact `git push` command.
+- Require exact phrase: `push branch <branch-name>`
+
+New upstream push:
+
+- Show the exact `git push -u origin <branch-name>` command.
+- Require exact phrase: `push branch <branch-name> with upstream`
+
+Protected branch push:
+
+- Show the exact command.
+- Require exact phrase: `push protected branch <branch-name>`
+
+`yes`, `ok`, `go`, or vague approval is not sufficient for any push type.
+
+### Execute mode
+
+Active only when `--execute` is explicitly passed. Manual mode is read-only.
+
+**Step 1 -- Plan first**
+
+Run the full read-only preflight and show the complete push plan before any mutation.
+
+**Step 2 -- Pre-push state check**
+
+Immediately before executing, re-run the preflight:
 
 ```bash
-gh run list --branch "$BRANCH" --limit 5
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+git status --short
+git rev-parse HEAD
+git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null || echo "no-upstream"
+git rev-list --count @{u}..HEAD 2>/dev/null || echo "no-upstream"
+git rev-list --count HEAD..@{u} 2>/dev/null || echo "no-upstream"
 ```
 
-If a matching CI run exists, report the status. Do not merge automatically.
+If branch name, HEAD SHA, upstream, ahead/behind count, or dirty state differs from the plan, emit a Trellis stop and do not push.
+
+**Step 3 -- Require approval**
+
+Display the push plan and require the exact approval phrase before proceeding. Do not push without it.
+
+**Step 4 -- Execute push**
+
+Run only the exact planned command:
+
+- New upstream: `git push -u origin <branch>`
+- Existing upstream: `git push`
+- No other arguments.
+- Never add `--force`.
+- Never add `--force-with-lease` unless the user explicitly requested it, the risk was explained, and the approval phrase includes an acknowledgment of the risk.
+
+If push fails for any reason, emit a Trellis stop and do not retry.
+
+**Step 5 -- Post-push verification**
+
+After a successful push:
+
+```bash
+git rev-parse HEAD
+git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null
+git rev-list --count @{u}..HEAD 2>/dev/null
+git rev-list --count HEAD..@{u} 2>/dev/null
+```
+
+Report:
+
+```
+Push result
+  Pushed SHA:     <full SHA>
+  Upstream now:   <upstream ref>
+  Ahead:          <N> (expected: 0)
+  Behind:         <N> (expected: 0)
+  In sync:        <yes / no>
+```
+
+**Step 6 -- Optional CI inspection**
+
+If the remote is GitHub and `gh` is available, run read-only after push:
+
+```bash
+gh run list --branch "<branch>" --limit 5
+```
+
+Interpret results:
+
+- Run found for pushed SHA: summarize status (queued / in_progress / success / failure / cancelled).
+- No run found yet: report CI not found yet for this SHA -- not green.
+- `gh` unavailable or lacks permission: report that plainly.
+- No workflows configured: report no workflows detected, not green.
+
+Never claim required checks passed unless the pushed SHA and required checks are both verified.
+Never create a PR. Never merge.
+
+### Push-mode stop conditions
+
+Emit a Trellis stop and halt when:
+
+- Not inside a Git repo.
+- HEAD is detached.
+- Working tree is dirty.
+- No remote is configured.
+- Requested remote does not exist.
+- Upstream is missing and user has not approved setting upstream with `push branch <name> with upstream`.
+- Branch is behind upstream (would need pull or rebase first).
+- Branch has diverged from upstream (ahead and behind simultaneously).
+- No commits ahead and no new upstream needed.
+- Protected branch pattern matched without the stronger `push protected branch <name>` phrase.
+- Push command would include `--force`.
+- `--force-with-lease` appears without explicit user request and risk acceptance.
+- Branch, HEAD SHA, upstream, or ahead/behind count changed between plan and execute.
+- Push fails.
+- Post-push verification fails or SHA cannot be confirmed.
+
+### Never in push mode
+
+- `git push --force`
+- `--force-with-lease` without explicit request
+- creating a PR
+- merging
+- enabling auto-merge
+- adding to merge queue
+- deleting branches or worktrees
+- pushing without showing the plan first
+- continuing after push failure
+- claiming CI is green without verifying the pushed SHA and required checks
 
 ---
 

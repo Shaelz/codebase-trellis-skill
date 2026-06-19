@@ -98,21 +98,25 @@ Acceptance:
 - dirty state does not cross branch boundary without decision
 - all six smoke scenarios passed (A: branch, B: worktree, C: dirty gate, D: local branch conflict, E: path conflict, F: branch-in-worktree conflict)
 
-## Phase 5 - Push and CI
+## Phase 5 - Push and CI (complete)
 
 Deliverables:
-- `push` mode
-- branch/remote/upstream/ahead detection
-- protected branch warning
-- explicit push plan
-- optional `--execute`
-- CI watch using `gh run list/view` when available
+- `push` mode with full branch/remote/upstream/ahead/behind detection
+- protected branch pattern matching (main, master, develop, release/*)
+- explicit push plan output (new upstream vs existing upstream)
+- approval contract with exact per-type phrases
+- execute mode with pre-push state re-check and post-push verification
+- push-mode stop conditions (15 conditions)
+- optional CI inspection via `gh run list` after successful push
+- Never-in-push-mode list
 
 Acceptance:
 - never `git push --force`
-- push execution requires explicit approval
-- protected branch requires typed branch name
-- CI monitoring never runs after failed push
+- push execution requires explicit approval phrase
+- protected branch requires stronger phrase: push protected branch <name>
+- CI not claimed green without pushed SHA and required checks verified
+- CI monitoring skipped on push failure
+- all six smoke scenarios passed (A: manual plan no upstream, B: execute new upstream, C: execute existing upstream, D: dirty gate, E: protected branch warning, F: behind/diverged gate)
 
 ## Phase 6 - Finish branch
 
