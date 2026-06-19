@@ -1246,36 +1246,215 @@ Emit a Trellis stop and halt when:
 
 ## `finish` mode
 
-Before presenting options, verify checks are fresh enough for the change type. If tests or checks fail, stop and report.
+Default: read-only inspection, then options menu. All destructive operations require exact approval.
 
-Detect environment:
+### Finish preflight
+
+Run all of the following before presenting options:
 
 ```bash
+git rev-parse --show-toplevel 2>/dev/null || echo "ERROR: not a git repo"
 GIT_DIR=$(cd "$(git rev-parse --git-dir)" 2>/dev/null && pwd -P)
 GIT_COMMON=$(cd "$(git rev-parse --git-common-dir)" 2>/dev/null && pwd -P)
-git branch --show-current
+BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+git rev-parse HEAD 2>/dev/null
 git status --short
-git merge-base HEAD main 2>/dev/null || git merge-base HEAD master 2>/dev/null
+git remote -v
+git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null || echo "no-upstream"
+git rev-list --count @{u}..HEAD 2>/dev/null || echo "no-upstream"
+git branch --list main master
+git log --oneline -10
+git worktree list
+gh pr list --head "$BRANCH" --json number,title,state,url,baseRefName 2>/dev/null || echo "gh-unavailable"
 ```
 
-Present options:
+Interpretation:
+
+- If not in a Git repo, emit a Trellis stop and halt.
+- If HEAD is detached (`BRANCH` is empty or `HEAD`), emit a Trellis stop if merge or discard is requested.
+- If `git status --short` returns any output, emit a Trellis stop: dirty working tree.
+- If `GIT_DIR != GIT_COMMON`, current checkout is a linked worktree -- note this in Root check.
+- Detect base branch: prefer `baseRefName` from open PR if `gh` available, else `main` if it exists, else `master`, else ask user.
+- If current branch equals detected base branch, refuse merge/discard with a Trellis stop.
+
+### Checks freshness gate
+
+Before presenting merge or discard options, assess check freshness:
+
+- If project has no configured checks (no `.github/workflows/`, no test script in `package.json`, no `Makefile` test target): report: "Checks: not configured. Acceptable for scratch smoke tests or with explicit user acceptance only. Not treated as passing."
+- If project has checks, require evidence that checks ran against the current HEAD SHA.
+- If checks are stale (ran against a different SHA), failed, or absent, emit a Trellis stop for merge/discard paths.
+- If `gh` is available and an open PR exists, inspect: `gh pr checks <pr-number> 2>/dev/null`
+- Do not claim required checks passed unless the SHA and required checks are both verified.
+
+### Finish options menu
+
+Present after preflight and checks assessment:
 
 ```
-Branch finish options:
-1. Prepare PR only
-2. Push and create PR
-3. Keep branch as-is
-4. Merge locally after checks
-5. Discard work (requires typed confirmation)
+Branch finish options
+  Branch:   <name>
+  Base:     <base-branch>
+  Checks:   <passed SHA / stale / not configured / not verified>
+  Worktree: <linked worktree / bare checkout>
+
+  1. Prepare PR only         (plan-only)
+  2. Prepare push + PR plan  (plan-only, refers to /codebase-trellis push)
+  3. Keep branch as-is       (no mutation)
+  4. Merge locally           (requires exact approval; checks must pass or scratch-no-checks accepted)
+  5. Discard work            (requires exact typed confirmation: discard <branch-name>)
 ```
 
-Rules:
-- If detached HEAD, do not offer local merge.
-- If dirty state exists, do not merge.
-- For PR path, do not remove worktree (iteration may continue).
-- For local merge, run checks before and after merge.
-- For cleanup, remove worktree before deleting branch.
-- For discard, require typed confirmation: `discard <branch-name>`.
+Blocked options appear in the menu with a reason:
+
+```
+  4. Merge locally           [BLOCKED: checks stale or failed]
+  5. Discard work            [BLOCKED: open PR exists -- cannot delete branch while PR is open]
+```
+
+### Option 1 -- Prepare PR only
+
+Plan-only in this pass. If GitHub remote is detected and `gh` is available:
+
+```
+PR preparation plan
+  Command: gh pr create --title "<title>" --body "<body template>" --base <base-branch>
+  Status:  plan only -- not executed
+```
+
+If no GitHub remote or `gh` is unavailable: report "PR creation not available -- no GitHub remote detected or gh unavailable."
+
+Never clean up or remove a worktree after this option. Iteration may continue.
+
+### Option 2 -- Prepare push + PR plan
+
+Plan-only in this pass. Do not execute push or PR creation from finish mode.
+
+Report the safe sequence:
+
+```
+Push + PR plan (not executed)
+  Step 1: /codebase-trellis push    -- run push mode for actual push execution
+  Step 2: /codebase-trellis finish  -- re-run after push succeeds to prepare PR
+  Or, after push: gh pr create --base <base-branch> --title "<title>"
+```
+
+Refer the user to `/codebase-trellis push` for push execution. Do not push from finish mode.
+
+### Option 3 -- Keep branch as-is
+
+No mutation.
+
+```
+Keep result
+  Branch:        <name>
+  Worktree path: <path or "N/A -- bare branch checkout">
+  Next actions:
+    /codebase-trellis commit  -- add more commits
+    /codebase-trellis push    -- push branch
+    /codebase-trellis finish  -- return here when ready to integrate
+```
+
+### Option 4 -- Merge locally after checks
+
+Executable only when all of the following are true:
+
+- Clean working tree.
+- Known base branch.
+- Fresh passing checks, or explicit scratch-only no-checks acceptance.
+- Current branch differs from base branch.
+- Approval phrase received: `merge branch <branch-name> into <base-branch>`
+
+Execute sequence:
+
+```bash
+git checkout <base-branch>
+git status --short
+git merge --no-ff <branch-name>
+git log --oneline -3
+git status --short
+```
+
+After merge:
+
+- Report merge commit SHA and new HEAD of base branch.
+- Do not push.
+- Do not delete the feature branch automatically.
+- Do not remove worktree.
+
+If merge would require conflict resolution, emit a Trellis stop. Do not attempt auto-resolution.
+
+### Option 5 -- Discard work
+
+Dangerous. Requires exact typed confirmation: `discard <branch-name>`.
+
+Before executing:
+
+- Show commits that would be lost: `git log <base-branch>..<branch-name> --oneline`
+- Confirm no open PR exists on this branch.
+- Confirm branch has been pushed or user accepts losing unmerged commits.
+
+Execution depends on checkout type.
+
+*Linked worktree checkout -- worktree-first order required:*
+
+```bash
+git worktree remove <worktree-path>
+git branch -d <branch-name>
+```
+
+If unmerged commits and discard is confirmed: `git branch -D <branch-name>` only after worktree removal succeeds.
+
+*Normal branch checkout:*
+
+```bash
+git checkout <base-branch>
+git branch -d <branch-name>
+```
+
+If unmerged: `git branch -D <branch-name>` only after switching to base and showing the evidence.
+
+After discard:
+
+```bash
+git branch --list <branch-name>
+git worktree list
+```
+
+Report worktree removal and branch deletion results. Both commands should show the branch and worktree path as absent.
+
+### Finish-mode stop conditions
+
+Emit a Trellis stop and halt when:
+
+- Not inside a Git repo.
+- HEAD is detached and merge or discard is requested.
+- Dirty working tree exists.
+- Base branch cannot be determined and merge or discard is requested.
+- Current branch is the base branch and merge or discard was requested.
+- Branch has no unique commits and merge/discard intent is unclear.
+- Checks are stale, failed, or absent for merge path (without explicit scratch-no-checks acceptance).
+- Open PR exists and cleanup or branch deletion was requested.
+- Worktree path cannot be confirmed as disposable before removal.
+- Branch is checked out in another worktree and deletion was requested from the wrong context.
+- Discard confirmation does not exactly match `discard <branch-name>`.
+- Local merge would require conflict resolution.
+- Merge fails.
+- Post-merge verification fails.
+- Any command would push, auto-merge, enable auto-merge, or add to merge queue.
+
+### Never in finish mode
+
+- executing PR creation (plan-only in this pass)
+- executing push (refer to `/codebase-trellis push`)
+- auto-merge or enabling auto-merge
+- adding to merge queue
+- removing a worktree after PR preparation
+- deleting a branch without exact typed confirmation
+- merging with stale/failed/absent checks except explicit scratch acceptance
+- continuing after a failed merge
+- pushing after merge
+- `git push --force`
 
 ---
 

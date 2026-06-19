@@ -118,24 +118,29 @@ Acceptance:
 - CI monitoring skipped on push failure
 - all six smoke scenarios passed (A: manual plan no upstream, B: execute new upstream, C: execute existing upstream, D: dirty gate, E: protected branch warning, F: behind/diverged gate)
 
-## Phase 6 - Finish branch
+## Phase 6 - Finish branch (complete)
 
 Deliverables:
-- `finish` mode
-- fresh checks requirement
-- environment detection
-- base branch detection
-- option menu
-- PR preparation
-- local merge path
-- cleanup path
-- discard path
+- `finish` mode with full preflight and checks freshness gate
+- base branch detection (PR baseRefName > main > master > ask user)
+- linked-worktree detection via GIT_DIR vs GIT_COMMON comparison
+- finish options menu (5 options with blocked-option display)
+- Option 1: Prepare PR only (plan-only)
+- Option 2: Prepare push + PR plan (plan-only, refers to /codebase-trellis push)
+- Option 3: Keep branch as-is (no mutation)
+- Option 4: Merge locally with checks gate and exact approval phrase
+- Option 5: Discard with typed confirmation and worktree-first cleanup order
+- finish-mode stop conditions (15 conditions)
+- Never-in-finish-mode list
 
 Acceptance:
-- no merge with failing tests
-- no cleanup after PR creation
-- worktree removed before branch deletion
-- discard requires typed confirmation
+- no merge with stale/failed/absent checks except explicit scratch acceptance
+- no PR creation executed (plan-only)
+- no push from finish mode
+- worktree removed before branch deletion (worktree-first order verified)
+- discard requires exact phrase: discard <branch-name>
+- no worktree removal after PR preparation
+- all eight smoke scenarios passed (A: PR plan-only, B: push+PR plan-only, C: keep as-is, D: local merge, E: discard normal branch, F: discard linked worktree, G: dirty gate, H: PR state unavailable)
 
 ## Phase 7 - GitHub posture audit
 

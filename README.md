@@ -65,7 +65,7 @@ If an installation already exists, the scripts exit with an error unless you pas
 /codebase-trellis commit       # plan commits (manual/read-only by default)
 /codebase-trellis commit --execute   # execute commits group by group after explicit per-group approval
 /codebase-trellis push         # plan push (manual by default); use --execute for gated push after approval
-/codebase-trellis finish       # finish branch: PR, merge, keep, or discard
+/codebase-trellis finish       # finish branch: PR plan, local merge, keep, or typed discard
 /codebase-trellis recover      # recover from Git mistakes
 ```
 
