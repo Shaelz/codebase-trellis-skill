@@ -435,7 +435,15 @@ gh api repos/:owner/:repo/secret-scanning/alerts
 gh api repos/:owner/:repo/code-scanning/alerts
 ```
 
-If any `gh api` call fails because of plan, permissions, or unavailable features, report that limitation. Do not infer. Report as: `Protection state: not verified. Do not assume main is protected.`
+If a `gh api` call fails, report the limitation. Do not infer safety from failure. Categorize by error shape:
+
+- `"Upgrade to GitHub Pro or make this repository public"` (403): plan limitation -- feature unavailable on free private repos.
+- `"needs the ... scope"` in message (403): permission gap -- suggest `gh auth refresh -h github.com -s <scope>`.
+- `"disabled for this repository"` (403/404): feature is off -- enable in repo settings if desired.
+- `"not enabled for this repository"` (403): feature not configured -- enable in repo settings if desired.
+- Any other failure: report raw error and continue.
+
+Always report as: `Protection state: not verified. Do not assume main is protected.`
 
 Output: full or short Trellis report as appropriate.
 
