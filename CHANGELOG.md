@@ -4,10 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-06-19
+
 ### Changed
 
-- Updated the quickstart to install from the exact current stable release tag,
-  `v1.0.0`, and documented that the pin must move with future releases.
+- Updated the quickstart to install from the exact `v1.0.1` release tag and documented
+  that the pin must move with future releases.
 - Changed force installs to replace the validated destination directory so stale files
   cannot survive across versions.
 - Added a GitHub hardening checklist for repository-side enforcement alongside Trellis.
