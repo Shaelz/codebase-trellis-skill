@@ -451,52 +451,275 @@ Output: full or short Trellis report as appropriate.
 
 ## `start` mode
 
-Prepare isolated work. Before creating anything:
+Prepare isolated work using a branch or worktree. This mode is read-only until explicit per-operation approval is given.
+
+### Start preflight
+
+Run all of the following before proposing anything:
 
 ```bash
+git rev-parse --show-toplevel 2>/dev/null || echo "ERROR: not a git repo"
 GIT_DIR=$(cd "$(git rev-parse --git-dir)" 2>/dev/null && pwd -P)
 GIT_COMMON=$(cd "$(git rev-parse --git-common-dir)" 2>/dev/null && pwd -P)
 git branch --show-current
+git remote -v
 git rev-parse --show-superproject-working-tree 2>/dev/null
 git status --short
+git worktree list
 ```
 
 Interpretation:
-- If not in a Git repo, stop.
-- If inside a submodule, treat as normal repo unless user intended submodule work.
-- If `GIT_DIR != GIT_COMMON` and not a submodule, report already in a linked worktree and do not create another.
-- If dirty state exists, ask whether to commit, stash, or continue in place. Do not switch branches over dirty state.
 
-Claim conflict check -- before creating a branch or worktree, check for existing ownership:
-- existing local branch with the same name
-- existing remote branch with the same name
-- existing worktree path
-- open PR for the same branch
-- pending CI for the same head SHA
+- If `rev-parse --show-toplevel` fails, emit a Trellis stop: not inside a Git repo.
+- If `rev-parse --show-superproject-working-tree` returns a path, the current directory is inside a submodule. Report this and treat as a normal repo unless the user explicitly intends submodule work.
+- If `GIT_DIR != GIT_COMMON` and the repo is not a submodule, the current checkout is already a linked worktree. Report this. Do not create another worktree adjacent to or nested under it unless the user explicitly requests it and the path is verified safe.
+- If `git status --short` returns any output, see "Dirty state handling" below.
 
-If another owner appears active, stop and ask before continuing.
+### Dirty state handling
 
-Worktree directory priority:
-1. explicit user path
-2. existing `.worktrees/`
-3. existing `worktrees/`
-4. default `.worktrees/`
+If dirty state exists:
 
-Before creating a project-local worktree:
+1. Report all dirty files.
+2. Present this decision before any branch or worktree operation:
 
-```bash
-git check-ignore -q .worktrees 2>/dev/null || git check-ignore -q worktrees 2>/dev/null
+```
+Dirty working tree detected. Choose before continuing:
+  a) Commit the changes first -- run /codebase-trellis commit
+  b) Stash -- git stash push -m "<description>"
+  c) Continue in place -- worktree can be created from a clean base ref; dirty files stay in the current checkout
+  d) Abort
+
+Branch switching is not safe over a dirty working tree.
+Worktree creation from a clean base ref is safe only if the dirty files remain untouched in the current checkout.
 ```
 
-If not ignored, propose adding the chosen worktree directory to `.gitignore`. Do not edit `.gitignore` without approval.
+3. Do not switch branches. Do not create anything. Wait for the user's decision.
 
-Create only after approval:
+### Claim conflict detection
+
+Before proposing any creation command, run:
 
 ```bash
-git worktree add <path> -b <branch-name>
+# Local branch check
+git branch --list "<requested-name>"
+
+# Remote branch check (only if a remote exists)
+git branch -r --list "origin/<requested-name>"
+
+# All worktrees -- detects path and branch conflicts
+git worktree list
+
+# Path existence check
+test -e "<requested-path>" && echo "path exists"
 ```
 
-After creation, run project setup and baseline checks based on repo conventions. If checks fail, report and stop unless the user explicitly chooses to continue.
+If `gh` is available:
+
+```bash
+gh pr list --head "<requested-name>" --json number,title,state 2>/dev/null
+```
+
+Conflict cases and handling:
+
+| Conflict | Action |
+|---|---|
+| Local branch exists | Trellis stop |
+| Remote branch exists | Trellis stop; intent unclear |
+| Branch checked out in another worktree | Trellis stop; cannot create second checkout |
+| Requested path exists (file or directory) | Trellis stop |
+| Open PR for the branch | Trellis stop; may be active work |
+
+If any conflict is found, emit a Trellis stop and do not create anything.
+
+### Worktree path selection
+
+Priority order:
+
+1. Explicit user-provided path
+2. Existing `.worktrees/` directory at the repo root
+3. Existing `worktrees/` directory at the repo root
+4. Default `.worktrees/` (to be created)
+
+Before using any project-local path, check ignore status:
+
+```bash
+git check-ignore -q .worktrees 2>/dev/null && echo "ignored" || echo "not-ignored"
+git check-ignore -q worktrees 2>/dev/null && echo "ignored" || echo "not-ignored"
+```
+
+If the chosen path is not gitignored:
+
+1. Warn: the worktree directory is not gitignored. Its contents may surface as untracked files in the main checkout.
+2. Propose adding the path to `.gitignore`. Show the exact line to add.
+3. Do not edit `.gitignore` without explicit approval.
+4. Do not create the worktree inside an unignored project-local directory unless the user explicitly approves the tracking risk.
+
+### Branch-only vs worktree decision
+
+Recommend branch-only when:
+- The repo is clean.
+- The user needs a normal branch and no parallel work is required.
+- No agent or session separation is needed.
+
+Recommend worktree when:
+- The user wants isolated parallel work without touching the current checkout.
+- The current branch must remain untouched.
+- Agent or session separation matters.
+- Dirty state exists on the current checkout and must not be disturbed.
+
+If the user does not specify, ask:
+
+```
+Do you want:
+  (a) branch only -- switches the current checkout to a new branch
+  (b) worktree    -- creates an isolated copy of the repo on a new branch
+```
+
+### Start-mode output contract
+
+After running the preflight, output in this order:
+
+**1. Trellis report** -- full form when worktree state, dirty state, or conflicts were detected; short form for a clean simple-branch start:
+
+```
+Trellis report
+
+Root check
+- Repo root:
+- Branch:
+- Remote/upstream:
+- Git dir:
+- Common git dir:
+- Linked-worktree status: <yes -- already a linked worktree at <path> / no>
+- Submodule/superproject: <yes -- superproject at <path> / no>
+- Dirty state: <files listed, or clean>
+
+Tangle check
+- Dirty files: <list or none>
+- Ignored/generated notes:
+- Pre-existing ambiguity:
+- Branch/worktree conflicts found: <list or none>
+
+Growth plan
+- Recommended isolation: <branch-only / worktree / decision-required>
+- Suggested branch name:
+- Suggested worktree path (if worktree):
+- .worktrees/ ignore status: <ignored / not-ignored / N/A>
+- Baseline checks to run after creation:
+
+Gate check
+- Safe to inspect/read: yes
+- Requires approval before branch creation: <exact command and approval phrase>
+- Requires approval before worktree creation: <exact command and approval phrase>
+- Requires approval before .gitignore edit: yes if needed
+
+Canopy check
+- Remote state: <remote URL / none>
+- Open PR/branch conflict: <found / not found / gh not available>
+- Protection state: <verified -- ... / not verified. Do not assume main is protected.>
+
+Next safe action
+- Recommendation:
+- Decision required from user:
+```
+
+**2. Creation plan:**
+
+Branch-only plan:
+
+```
+Branch creation plan
+  Branch name: <name>
+  Base:        <current branch or HEAD>
+  Command:     git checkout -b <name>
+
+Approve?
+Reply exactly: create branch <name>
+```
+
+Worktree plan:
+
+```
+Worktree creation plan
+  Branch name:    <name>
+  Worktree path:  <path>
+  Command:        git worktree add <path> -b <name>
+  .gitignore edit needed: <yes / no>
+
+Approve?
+Reply exactly: create worktree <name> at <path>
+```
+
+**3. Post-creation report:**
+
+After successful creation:
+
+```
+Created: <branch / worktree>
+  Branch:           <name>
+  Path (worktree):  <absolute path>
+  Status:           <git branch output or git worktree list output>
+
+Baseline checks recommended:
+  <list based on repo conventions, e.g.:
+    package.json present -- run: npm install
+    Gemfile present      -- run: bundle install
+    Cargo.toml present   -- run: cargo build
+    requirements.txt present -- run: pip install -r requirements.txt
+    go.mod present       -- run: go build ./...>
+
+Next step: Work in <path or current checkout on new branch>.
+```
+
+### Approval contract
+
+Branch creation:
+
+- Show the exact `git checkout -b <name>` command.
+- Require exact phrase: `create branch <name>`
+- `yes`, `ok`, `go`, or vague approval is not sufficient.
+
+Worktree creation:
+
+- Show the exact `git worktree add <path> -b <name>` command.
+- Require exact phrase: `create worktree <name> at <path>`
+- `yes`, `ok`, `go`, or vague approval is not sufficient.
+
+`.gitignore` edit:
+
+- Show the exact line to be added.
+- Do not edit without explicit approval.
+
+Approval for one operation does not approve any other operation in the same session.
+
+### Start-mode stop conditions
+
+Emit a Trellis stop and halt when:
+
+- Not inside a Git repo.
+- Current checkout is already a linked worktree and creating another is unsafe.
+- Submodule/superproject state is ambiguous and user has not clarified intent.
+- Dirty state exists and branch switching was requested without a commit/stash decision.
+- Requested branch name already exists locally.
+- Requested branch name already exists on remote and intent is unclear.
+- Requested branch is already checked out in another worktree.
+- Requested worktree path already exists.
+- Chosen worktree path is not gitignored and user has not approved the tracking risk.
+- Branch name or path contains `..`, `//`, or other path-traversal characters.
+- `git worktree add` fails.
+- Baseline checks fail after creation and user has not chosen to continue.
+
+### Never in start mode
+
+- `git push`
+- `git merge`
+- `git rebase`
+- deleting branches or worktrees
+- cleaning up or removing worktrees
+- editing `.gitignore` without approval
+- creating a branch or worktree without showing the plan and receiving exact approval
+- silently resolving dirty state
+- silently proceeding after a conflict is detected
 
 ---
 

@@ -78,21 +78,25 @@ Acceptance:
 - final report includes commit SHAs
 - never pushes
 
-## Phase 4 - Worktree lifecycle
+## Phase 4 - Worktree lifecycle (complete)
 
 Deliverables:
-- `start` mode
-- worktree/submodule detection
-- `.worktrees/` ignore verification
-- setup command detection
-- baseline checks
-- claim conflict detection
+- `start` mode with full branch-only and worktree paths
+- linked-worktree and submodule detection
+- dirty-state gating with commit/stash/continue-in-place decision
+- `.worktrees/` ignore verification and `.gitignore` proposal
+- claim conflict detection (local branch, remote branch, path, checked-out branch)
+- exact per-operation approval phrases
+- baseline check recommendations after creation
+- start-mode stop conditions and Never list
 
 Acceptance:
 - no nested accidental worktrees
 - no unignored worktree contents
 - no pretending failing baseline is fine
 - stops when another agent appears to own the branch/worktree
+- dirty state does not cross branch boundary without decision
+- all six smoke scenarios passed (A: branch, B: worktree, C: dirty gate, D: local branch conflict, E: path conflict, F: branch-in-worktree conflict)
 
 ## Phase 5 - Push and CI
 
