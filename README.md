@@ -32,7 +32,7 @@ script from the repository root.
 git clone https://github.com/Shaelz/codebase-trellis-skill.git
 cd codebase-trellis-skill
 git fetch --tags
-git checkout v1.0.0
+git checkout v1.0.1
 .\scripts\install-user.ps1
 ```
 
@@ -42,13 +42,13 @@ git checkout v1.0.0
 git clone https://github.com/Shaelz/codebase-trellis-skill.git
 cd codebase-trellis-skill
 git fetch --tags
-git checkout v1.0.0
+git checkout v1.0.1
 bash scripts/install-user.sh
 ```
 
 Then restart Claude Code and type `/codebase-trellis` in any project.
 
-These commands intentionally pin the current published stable release, `v1.0.0`.
+These commands intentionally pin release `v1.0.1`.
 The pinned tag must be updated here whenever a newer release is published.
 Advanced users may install from `main` only when intentionally testing unreleased changes.
 
@@ -64,10 +64,9 @@ Advanced users may install from `main` only when intentionally testing unrelease
 User-level install makes the skill available in all projects. Project-local install adds it only to the current project's `.claude/skills/` directory. For project-local installs, navigate to your project root first, then call the script using the full path to where you cloned this repo.
 
 If an installation already exists, the scripts exit with an error unless you pass
-`-Force` (PowerShell) or `--force` (bash). In the current unreleased source, force
-mode removes the existing `codebase-trellis` skill directory after validating its exact
-expected path, then copies the selected version. This prevents stale files from surviving
-an upgrade. The published `v1.0.0` scripts predate this replacement behavior.
+`-Force` (PowerShell) or `--force` (bash). Force mode removes the existing
+`codebase-trellis` skill directory after validating its exact expected path, then copies
+the selected version. This prevents stale files from surviving an upgrade.
 
 ## Usage
 
